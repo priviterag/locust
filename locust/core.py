@@ -355,5 +355,12 @@ class TaskSet(object):
 
 
 class Scenario(TaskSet):
+    def __init__(self, parent):
+        self.current_task_index = -1
+        TaskSet.__init__(self, parent)
+
     def get_next_task(self):
-        return self.tasks[0]
+        self.current_task_index += 1
+        if self.current_task_index == len(self.tasks):
+            self.current_task_index = 0
+        return self.tasks[len(self.tasks) - 1 - self.current_task_index]
