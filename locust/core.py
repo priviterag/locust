@@ -356,4 +356,4 @@ class TaskSet(object):
 
 class Scenario(TaskSet):
     def get_next_task(self):
-        return random.choice(self.tasks)
+        return self.tasks[0]
