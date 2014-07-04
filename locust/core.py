@@ -355,12 +355,54 @@ class TaskSet(object):
 
 
 class Scenario(TaskSet):
-    def __init__(self, parent):
-        self.current_task_index = -1
-        TaskSet.__init__(self, parent)
+    # def __init__(self, parent):
+    #     self.current_task_index = -1
+    #     TaskSet.__init__(self, parent)
 
-    def get_next_task(self):
-        self.current_task_index += 1
-        if self.current_task_index == len(self.tasks):
-            self.current_task_index = 0
-        return self.tasks[len(self.tasks) - 1 - self.current_task_index]
+    def run(self, *args, **kwargs):
+        self.args = args
+        self.kwargs = kwargs
+
+        try:
+            if hasattr(self, "on_start"):
+                self.on_start()
+        except InterruptTaskSet as e:
+            if e.reschedule:
+                raise RescheduleTaskImmediately, e, sys.exc_info()[2]
+            else:
+                raise RescheduleTask, e, sys.exc_info()[2]
+
+        while (True):
+            try:
+                for task in self.tasks:
+                    if self.locust.stop_timeout is not None and time() - self._time_start > self.locust.stop_timeout:
+                        return
+
+                    try:
+                        t = self.build_task(task)
+                        self.execute_task(t["callable"], *t["args"], **t["kwargs"])
+                    except RescheduleTaskImmediately:
+                        pass
+                    except RescheduleTask:
+                        self.wait()
+                    else:
+                        self.wait()
+            except InterruptTaskSet as e:
+                if e.reschedule:
+                    raise RescheduleTaskImmediately, e, sys.exc_info()[2]
+                else:
+                    raise RescheduleTask, e, sys.exc_info()[2]
+            except StopLocust:
+                raise
+            except GreenletExit:
+                raise
+            except Exception as e:
+                events.locust_error.fire(locust_instance=self, exception=e, tb=sys.exc_info()[2])
+                if self.locust._catch_exceptions:
+                    sys.stderr.write("\n" + traceback.format_exc())
+                    self.wait()
+                else:
+                    raise
+
+    def build_task(self, task_callable, args=None, kwargs=None, first=False):
+        return {"callable":task_callable, "args":args or [], "kwargs":kwargs or {}}
